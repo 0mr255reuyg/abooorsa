@@ -2,388 +2,217 @@ import streamlit as st
 import yfinance as yf
 import pandas as pd
 import numpy as np
+import time
+import warnings
 import plotly.graph_objects as go
 from datetime import datetime
-import warnings
 
 warnings.filterwarnings("ignore")
-st.set_page_config(page_title="BIST PRO Tarayıcı", layout="wide", page_icon="📈")
 
 # ─────────────────────────────────────────────────────────────────────────────
-# TASARIM
+# BIST HİSSE LİSTESİ
 # ─────────────────────────────────────────────────────────────────────────────
-st.markdown("""
-    <style>
-    .stApp { background: #0e1117; color: #ffffff; }
-    .stButton>button {
-        background: #00ff41; color: #000; font-weight: bold;
-        border: none; padding: 15px 30px; border-radius: 10px; width: 100%;
-    }
-    .stock-card { background: #1f2937; padding: 15px; border-radius: 10px; margin: 10px 0; border-left: 4px solid #00ff41; }
-    .metric-box { background: #1f2937; padding: 15px; border-radius: 10px; border: 1px solid #00ff41; text-align: center; }
-    </style>
-    """, unsafe_allow_html=True)
-
-# ─────────────────────────────────────────────────────────────────────────────
-# HİSSE LİSTESİ (50 ADET)
-# ─────────────────────────────────────────────────────────────────────────────
-TICKERS = [
-    "THYAO.IS", "ASELS.IS", "GARAN.IS", "AKBNK.IS", "EREGL.IS", "TUPRS.IS",
-    "SASA.IS", "KCHOL.IS", "SAHOL.IS", "BIMAS.IS", "MGROS.IS", "FROTO.IS",
-    "TOASO.IS", "TCELL.IS", "TTKOM.IS", "HEKTS.IS", "ALARK.IS", "DOHOL.IS",
-    "ISCTR.IS", "YKBNK.IS", "HALKB.IS", "VAKBN.IS", "KOZAL.IS", "SOKM.IS",
-    "CCOLA.IS", "ANSGR.IS", "PGSUS.IS", "ULKER.IS", "TAVHL.IS", "ISGYO.IS",
-    "EKGYO.IS", "VESBE.IS", "BRISA.IS", "DEVA.IS", "GUBRF.IS", "POLHO.IS",
-    "CIMSA.IS", "NUHOL.IS", "KARSN.IS", "DOAS.IS", "TTRAK.IS", "MAVI.IS",
-    "AEFES.IS", "LOGO.IS", "NETAS.IS", "IHLGM.IS", "OYAKC.IS", "SELEC.IS",
-    "FENER.IS", "GSRAY.IS"
+BIST_TICKERS = [
+    "THYAO.IS","EREGL.IS","GARAN.IS","AKBNK.IS","YKBNK.IS","ISCTR.IS","KCHOL.IS",
+    "SASA.IS","BIMAS.IS","FROTO.IS","TUPRS.IS","ASELS.IS","TOASO.IS","PGSUS.IS",
+    "HALKB.IS","VAKBN.IS","TKFEN.IS","ENKAI.IS","KOZAL.IS","KRDMD.IS","PETKM.IS",
+    "TTKOM.IS","TAVHL.IS","OTKAR.IS","SAHOL.IS","ARCLK.IS","VESTL.IS","MGROS.IS",
+    "EKGYO.IS","ULKER.IS","TCELL.IS","SISE.IS","DOHOL.IS","AEFES.IS","LOGO.IS",
+    "MAVI.IS","NETAS.IS","KOZA1.IS","BRISA.IS","CCOLA.IS","IHLGM.IS","ALARK.IS",
+    "ZOREN.IS","AKSEN.IS","AYGAZ.IS","GOLTS.IS","TSKB.IS","KLNMA.IS","ISGYO.IS"
 ]
 
+# Tekrar edenleri temizle
+BIST_TICKERS = list(dict.fromkeys(BIST_TICKERS))
+
 # ─────────────────────────────────────────────────────────────────────────────
-# FONKSİYONLAR
+# YARDIMCI FONKSİYONLAR
 # ─────────────────────────────────────────────────────────────────────────────
+def calculate_rsi(series: pd.Series, period: int = 14) -> pd.Series:
+    delta = series.diff()
+    gain = delta.clip(lower=0)
+    loss = -delta.clip(upper=0)
+    avg_gain = gain.ewm(alpha=1/period, min_periods=period).mean()
+    avg_loss = loss.ewm(alpha=1/period, min_periods=period).mean()
+    rs = avg_gain / avg_loss.replace(0, np.nan)
+    return 100 - (100 / (1 + rs))
 
-def calculate_rsi(close, period=14):
-    """RSI hesapla - DÜZELTİLMİŞ"""
-    close = np.array(close)
-    if len(close) < period + 1:
-        return 50.0
-    
-    delta = np.diff(close)
-    gain = np.where(delta > 0, delta, 0)
-    loss = np.where(delta < 0, -delta, 0)
-    
-    avg_gain = np.mean(gain[:period]) if len(gain) >= period else 0
-    avg_loss = np.mean(loss[:period]) if len(loss) >= period else 1
-    
-    for i in range(period, len(gain)):
-        avg_gain = (avg_gain * (period - 1) + gain[i]) / period
-        avg_loss = (avg_loss * (period - 1) + loss[i]) / period
-    
-    rs = avg_gain / avg_loss if avg_loss != 0 else 100
-    rsi = 100 - (100 / (1 + rs))
-    return rsi
+def calculate_macd(series: pd.Series, fast=12, slow=26, signal=9):
+    ema_fast = series.ewm(span=fast, adjust=False).mean()
+    ema_slow = series.ewm(span=slow, adjust=False).mean()
+    macd_line = ema_fast - ema_slow
+    signal_line = macd_line.ewm(span=signal, adjust=False).mean()
+    histogram = macd_line - signal_line
+    return macd_line, signal_line, histogram
 
-def get_fundamentals(ticker):
-    """Temel verileri çek"""
+def calculate_atr(high: pd.Series, low: pd.Series, close: pd.Series, period: int = 14) -> pd.Series:
+    prev_close = close.shift(1)
+    tr = pd.concat([
+        high - low,
+        (high - prev_close).abs(),
+        (low - prev_close).abs()
+    ], axis=1).max(axis=1)
+    return tr.ewm(span=period, adjust=False).mean()
+
+# ─────────────────────────────────────────────────────────────────────────────
+# ANA PUANLAMA FONKSİYONU
+# ─────────────────────────────────────────────────────────────────────────────
+def score_ticker(ticker: str, sector_stats: dict):
     try:
-        info = yf.Ticker(ticker).info
-        return {
-            'pe': info.get('trailingPE'),
-            'pb': info.get('priceToBook'),
-            'sector': info.get('sector', 'Genel'),
-            'market_cap': info.get('marketCap'),
-            'earnings_growth': info.get('earningsQuarterlyGrowth'),
-            'dividend_yield': info.get('dividendYield')
-        }
-    except:
-        return {'pe': None, 'pb': None, 'sector': 'Genel', 'market_cap': None, 
-                'earnings_growth': None, 'dividend_yield': None}
+        raw = yf.download(ticker, period="1y", interval="1d", auto_adjust=True, progress=False)
+        if raw is None or len(raw) < 60:
+            return None
 
-def score_ticker(ticker):
-    """Hisse analizi - PROFESYONEL PUANLAMA (Maks 100)"""
-    try:
-        # Teknik veri
-        df = yf.download(ticker, period="6mo", progress=False, timeout=10)
-        
-        if df is None or len(df) < 60:
+        if isinstance(raw.columns, pd.MultiIndex):
+            raw.columns = raw.columns.get_level_values(0)
+
+        raw = raw.dropna(subset=["Close", "High", "Low", "Volume"])
+        if len(raw) < 60:
             return None
-        
-        if isinstance(df.columns, pd.MultiIndex):
-            df.columns = df.columns.get_level_values(0)
-        
-        if 'Close' not in df.columns:
-            return None
-        
-        df = df.dropna(subset=['Close'])
-        if len(df) < 60:
-            return None
-        
-        close = df['Close'].values
-        high = df['High'].values
-        low = df['Low'].values
-        vol = df['Volume'].values
-        
-        current_price = float(close[-1])
-        
-        # ── TEKNİK ANALİZ (60 Puan) ──────────────────────────────────────────
-        teknik_skor = 0
-        
-        # MA50 (15 puan)
-        ma50 = float(np.mean(close[-50:])) if len(close) >= 50 else current_price
-        if current_price > ma50:
-            teknik_skor += 15
-        
-        # RSI (15 puan)
-        rsi = calculate_rsi(close, 14)
-        if 50 <= rsi <= 60:
-            teknik_skor += 15  # İdeal bölge
-        elif 45 <= rsi < 50:
-            teknik_skor += 12
-        elif 60 < rsi <= 70:
-            teknik_skor += 10
-        elif 35 <= rsi < 45:
-            teknik_skor += 8
-        else:
-            teknik_skor += 5
-        
-        # MACD (15 puan)
-        exp1 = pd.Series(close).ewm(span=12, adjust=False).mean()
-        exp2 = pd.Series(close).ewm(span=26, adjust=False).mean()
-        macd = exp1 - exp2
-        signal = macd.ewm(span=9, adjust=False).mean()
-        macd_val = float(macd.iloc[-1])
-        signal_val = float(signal.iloc[-1])
-        hist_val = float((macd - signal).iloc[-1])
-        hist_prev = float((macd - signal).iloc[-2]) if len(macd) > 2 else 0
-        
-        if macd_val > signal_val and hist_val > hist_prev:
-            teknik_skor += 15  # Güçlü alı
-        elif macd_val > signal_val:
-            teknik_skor += 10
-        elif hist_val > 0:
-            teknik_skor += 5
-        
-        # Momentum (15 puan)
-        momentum = 0
-        if len(close) >= 22:
-            momentum = ((close[-1] / close[-21]) - 1) * 100
-        
-        if momentum > 10:
-            teknik_skor += 15
-        elif momentum > 5:
-            teknik_skor += 12
-        elif momentum > 0:
-            teknik_skor += 8
-        elif momentum > -5:
-            teknik_skor += 4
-        
-        teknik_skor = min(teknik_skor, 60)
-        
-        # ── TEMEL ANALİZ (40 Puan) ───────────────────────────────────────────
+
+        close = raw["Close"].squeeze()
+        high = raw["High"].squeeze()
+        low = raw["Low"].squeeze()
+        vol = raw["Volume"].squeeze()
+
+        ma50 = close.rolling(50).mean()
+        ma200 = close.rolling(200).mean()
+        current_price = float(close.iloc[-1])
+        ma50_val = float(ma50.iloc[-1])
+        ma200_val = float(ma200.iloc[-1]) if not np.isnan(ma200.iloc[-1]) else None
+
+        above_ma50 = current_price > ma50_val
+        above_ma200 = (ma200_val is None) or (current_price > ma200_val)
+
+        trend_ok = above_ma50 and above_ma200
+        if not trend_ok:
+            return {
+                "Ticker": ticker, "Fiyat": round(current_price, 2),
+                "Toplam Skor": 0, "Temel Skor": 0, "Teknik Skor": 0,
+                "RSI": None, "MACD Sinyal": "-", "Hacim OK": False,
+                "MA50 Üzeri": above_ma50, "MA200 Üzeri": above_ma200,
+                "Elendi": "Trend Altı"
+            }
+
+        rsi_series = calculate_rsi(close, 14)
+        rsi_val = float(rsi_series.iloc[-1]) if not rsi_series.empty else 50.0
+
+        macd_line, signal_line, histogram = calculate_macd(close)
+        macd_val = float(macd_line.iloc[-1])
+        signal_val = float(signal_line.iloc[-1])
+        hist_val = float(histogram.iloc[-1])
+        hist_prev = float(histogram.iloc[-2]) if len(histogram) > 1 else 0.0
+
+        macd_cross = (float(macd_line.iloc[-2]) < float(signal_line.iloc[-2])) and (macd_val > signal_val)
+        hist_growing = hist_val > 0 and hist_val > hist_prev
+
+        vol_5d = float(vol.iloc[-5:].mean())
+        vol_20d = float(vol.iloc[-20:].mean())
+        volume_ok = vol_5d > vol_20d
+
+        atr_series = calculate_atr(high, low, close, 14)
+        atr_val = float(atr_series.iloc[-1])
+        atr_pct = (atr_val / current_price) * 100
+
+        try:
+            ticker_obj = yf.Ticker(ticker)
+            info = ticker_obj.info or {}
+        except Exception:
+            info = {}
+
+        pb_ratio = info.get("priceToBook", None)
+        pe_ratio = info.get("trailingPE", None) or info.get("forwardPE", None)
+        earnings_growth = info.get("earningsQuarterlyGrowth", None)
+        sector = info.get("sector", "Unknown")
+
         temel_skor = 0
-        fundamentals = get_fundamentals(ticker)
-        
-        pe = fundamentals['pe']
-        pb = fundamentals['pb']
-        sector = fundamentals['sector']
-        earnings_growth = fundamentals['earnings_growth']
-        dividend_yield = fundamentals['dividend_yield']
-        
-        # F/K (15 puan)
-        if pe and pe > 0:
-            if pe < 10:
-                temel_skor += 15
-            elif pe < 15:
-                temel_skor += 12
-            elif pe < 20:
-                temel_skor += 8
-            elif pe < 30:
-                temel_skor += 4
-            else:
-                temel_skor += 2
-        else:
-            temel_skor += 5  # Veri yoksa nötr
-        
-        # PD/DD (15 puan)
-        if pb and pb > 0:
-            if pb < 2:
-                temel_skor += 15
-            elif pb < 3:
-                temel_skor += 12
-            elif pb < 5:
-                temel_skor += 8
-            elif pb < 8:
-                temel_skor += 4
-            else:
-                temel_skor += 2
-        else:
-            temel_skor += 5
-        
-        # Kar Büyümesi (10 puan)
-        if earnings_growth:
-            if earnings_growth > 0.5:
-                temel_skor += 10
-            elif earnings_growth > 0.25:
-                temel_skor += 8
-            elif earnings_growth > 0.1:
-                temel_skor += 6
-            elif earnings_growth > 0:
-                temel_skor += 4
-            else:
-                temel_skor += 0
-        else:
-            temel_skor += 3
-        
-        temel_skor = min(temel_skor, 40)
-        
-        # ── TOPLAM ───────────────────────────────────────────────────────────
-        toplam_skor = teknik_skor + temel_skor
-        
-        # MACD Label
-        if macd_val > signal_val and hist_val > hist_prev:
-            macd_label = "🔥 Güçlü Alı"
-        elif macd_val > signal_val:
-            macd_label = "✅ Pozitif"
-        else:
-            macd_label = "❌ Negatif"
-        
-        # Hacim kontrolü
-        vol_5d = np.mean(vol[-5:]) if len(vol) >= 5 else 0
-        vol_20d = np.mean(vol[-20:]) if len(vol) >= 20 else 0
-        volume_ok = vol_5d > vol_20d if vol_20d > 0 else False
-        
+        teknik_skor = 0
+
+        # Temel Puanlama
+        if pb_ratio and pb_ratio > 0: temel_skor += 10
+        if pe_ratio and pe_ratio > 0: temel_skor += 10
+        if earnings_growth and earnings_growth > 0: temel_skor += 10
+
+        # Teknik Puanlama
+        if 40 <= rsi_val <= 65: teknik_skor += 15
+        if macd_cross: teknik_skor += 20
+        elif hist_growing: teknik_skor += 10
+        if volume_ok: teknik_skor += 10
+        if 1.5 <= atr_pct <= 4.5: teknik_skor += 10
+
+        toplam_skor = min(temel_skor + teknik_skor, 100)
+
+        macd_label = "🔥 Crossover" if macd_cross else "📈 Hist. Büyüyor" if hist_growing else "✅ Pozitif" if hist_val > 0 else "❌ Negatif"
+
         return {
-            'Hisse': ticker.replace('.IS', ''),
-            'Fiyat': round(current_price, 2),
-            'Toplam Skor': round(toplam_skor, 1),
-            'Teknik Skor': round(teknik_skor, 1),
-            'Temel Skor': round(temel_skor, 1),
-            'RSI': round(rsi, 1),
-            'MACD': macd_label,
-            'Momentum%': round(momentum, 2),
-            'F/K': round(pe, 1) if pe else 'N/A',
-            'PD/DD': round(pb, 1) if pb else 'N/A',
-            'Sektör': sector,
-            'Kar Büyümesi': f"{earnings_growth*100:.1f}%" if earnings_growth else 'N/A',
-            'Hacim': '✅' if volume_ok else '❌',
-            'MA50 Üstü': '✅' if current_price > ma50 else '❌'
+            "Ticker": ticker,
+            "Fiyat": round(current_price, 2),
+            "Sektör": sector,
+            "Toplam Skor": round(toplam_skor, 1),
+            "Temel Skor": round(temel_skor, 1),
+            "Teknik Skor": round(teknik_skor, 1),
+            "RSI": round(rsi_val, 1),
+            "MACD Sinyal": macd_label,
+            "Hacim OK": volume_ok,
+            "MA50 Üzeri": above_ma50,
+            "MA200 Üzeri": above_ma200,
+            "ATR%": round(atr_pct, 2),
+            "Elendi": None
         }
-    except Exception as e:
+
+    except Exception:
         return None
 
 # ─────────────────────────────────────────────────────────────────────────────
-# ANA UYGULAMA
+# STREAMLIT ARAYÜZÜ
 # ─────────────────────────────────────────────────────────────────────────────
+st.set_page_config(page_title="BIST Swing Trade Tarayıcı", page_icon="📈", layout="wide")
 
-def main():
-    st.title("🚀 BIST PRO Hisse Tarayıcı")
-    st.markdown("**Temel + Teknik Analiz | Maks 100 Puan | 70+ = AL**")
-    st.info("⚠️ Yatırım Tavsiyesi Değildir. Veriler 15 dk gecikmeli olabilir.")
+st.title("📈 BIST Swing Trade Tarama & Puanlama Sistemi")
+st.markdown("**Sistem Mantığı:** Temel ve Teknik Analiz harmanlanarak 100 üzerinden puanlama yapılır.")
+st.divider()
+
+with st.sidebar:
+    st.header("⚙️ Tarama Ayarları")
+    min_score = st.slider("Minimum AL Skoru", 30, 90, 50, 5)
+    # Varsayılan hisse sayısını 20'ye düşürdük (çökmemesi için)
+    max_tickers = st.slider("Taranacak Hisse Sayısı", 5, len(BIST_TICKERS), 20, 5)
+    # Gecikmeyi 0.5 yaptık (Yahoo banlamasın diye)
+    delay = st.slider("İstekler Arası Gecikme (sn)", 0.1, 2.0, 0.5, 0.1)
     
-    st.sidebar.header("⚙️ Ayarlar")
-    min_score = st.sidebar.slider("Minimum AL Skoru", 50, 90, 70, 5)
-    max_stocks = st.sidebar.slider("Taranacak Hisse Sayısı", 20, 50, 50, 5)
-    show_all = st.sidebar.checkbox("Tüm Hisseleri Göster", value=False)
+    start_button = st.button("🚀 Taramayı Başlat", type="primary", use_container_width=True)
+
+scan_list = BIST_TICKERS[:max_tickers]
+
+if start_button:
+    st.info(f"🔍 {len(scan_list)} hisse taranıyor... Lütfen bekleyin.")
     
-    st.divider()
-    
-    if st.button("🚀 TARAMAYI BAŞLAT"):
-        with st.spinner('⏳ Taranıyor... (2-3 dakika)'):
-            results = []
-            progress_bar = st.progress(0)
-            status_text = st.empty()
-            error_count = 0
-            
-            for i, ticker in enumerate(TICKERS[:max_stocks]):
-                status_text.text(f"🔍 {ticker} ({i+1}/{max_stocks})")
-                result = score_ticker(ticker)
-                if result:
-                    results.append(result)
-                else:
-                    error_count += 1
-                progress_bar.progress((i + 1) / max_stocks)
-            
-            status_text.empty()
-            progress_bar.empty()
-            
-            st.divider()
-            
-            c1, c2, c3, c4 = st.columns(4)
-            c1.metric("🔍 Taranan", max_stocks)
-            c2.metric("✅ Bulunan", len(results))
-            c3.metric("🚀 AL Listesi", len([r for r in results if r['Toplam Skor'] >= min_score]))
-            c4.metric("⚠️ Hata", error_count)
-            
-            if not results:
-                st.error("⚠️ Hiç veri alınamadı. 2 dakika bekleyip tekrar deneyin.")
-                st.stop()
-            
-            df = pd.DataFrame(results)
-            df = df.sort_values('Toplam Skor', ascending=False).reset_index(drop=True)
-            df_al = df[df['Toplam Skor'] >= min_score]
-            
-            if len(df_al) < 3 and not show_all:
-                df_al = df.head(10)
-            
-            st.divider()
-            
-            if not df_al.empty:
-                st.subheader(f"🏆 En İyi 5 Hisse ({min_score}+ Puan)")
-                cols = st.columns(min(5, len(df_al)))
-                for idx, (_, row) in enumerate(df_al.head(5).iterrows()):
-                    with cols[idx]:
-                        emoji = "🥇" if idx == 0 else "🥈" if idx == 1 else "🥉" if idx == 2 else "⭐"
-                        st.markdown(f"""
-                        <div class="stock-card">
-                            <h4>{emoji} {row['Hisse']}</h4>
-                            <b>Fiyat:</b> {row['Fiyat']} ₺<br>
-                            <b>Toplam Skor:</b> <span style="color:#00ff41;font-size:18px">{row['Toplam Skor']}/100</span><br>
-                            <b>Teknik:</b> {row['Teknik Skor']}/60 | <b>Temel:</b> {row['Temel Skor']}/40<br>
-                            <b>RSI:</b> {row['RSI']} | <b>MACD:</b> {row['MACD']}<br>
-                            <b>F/K:</b> {row['F/K']} | <b>PD/DD:</b> {row['PD/DD']}<br>
-                            <b>Sektör:</b> {row['Sektör']}<br>
-                            <b>Momentum:</b> %{row['Momentum%']}
-                        </div>
-                        """, unsafe_allow_html=True)
-                
-                st.divider()
-                st.subheader("📊 Tüm AL Listesi")
-                display_cols = ['Hisse', 'Fiyat', 'Toplam Skor', 'Teknik Skor', 'Temel Skor',
-                               'RSI', 'MACD', 'F/K', 'PD/DD', 'Sektör', 'Momentum%', 'Kar Büyümesi', 'Hacim']
-                st.dataframe(df_al[display_cols], use_container_width=True, hide_index=True)
-                
-                csv = df_al[display_cols].to_csv(index=False, encoding='utf-8-sig')
-                st.download_button("📥 CSV İndir", csv, "bist_pro_tarama.csv", "text/csv")
-                
-                # Grafik
-                st.divider()
-                st.subheader("📈 Skor Dağılımı (İlk 15)")
-                df_chart = df_al.head(15)
-                fig = go.Figure()
-                fig.add_trace(go.Bar(x=df_chart['Hisse'], y=df_chart['Teknik Skor'], 
-                                    name='Teknik (60)', marker_color='#4A90D9'))
-                fig.add_trace(go.Bar(x=df_chart['Hisse'], y=df_chart['Temel Skor'], 
-                                    name='Temel (40)', marker_color='#F4A83A'))
-                fig.add_hline(y=min_score, line_dash='dash', line_color='red', 
-                             annotation_text=f"AL Eşiği ({min_score})")
-                fig.update_layout(template='plotly_dark', barmode='stack', 
-                                 title='Teknik + Temel Skor Dağılımı', height=400,
-                                 xaxis_tickangle=-45)
-                st.plotly_chart(fig, use_container_width=True)
-                
-                st.success(f"✅ Tarama Tamamlandı! {len(df_al)} hisse {min_score}+ puan aldı.")
-            else:
-                st.warning(f"⚠️ {min_score}+ puan alan bulunamadı. Skoru düşürün.")
-    
+    results = []
+    progress_bar = st.progress(0)
+    status_text = st.empty()
+
+    for i, ticker in enumerate(scan_list):
+        status_text.text(f"⏳ Taranan: {ticker} ({i+1}/{len(scan_list)})")
+        res = score_ticker(ticker, {})
+        if res: results.append(res)
+        progress_bar.progress((i + 1) / len(scan_list))
+        time.sleep(delay)
+
+    progress_bar.empty()
+    status_text.empty()
+
+    if not results:
+        st.error("Veri alınamadı. İnternet veya Yahoo Finance kaynaklı bir sorun olabilir.")
+        st.stop()
+
+    df_all = pd.DataFrame(results).sort_values("Toplam Skor", ascending=False)
+    df_al = df_all[(df_all["Elendi"].isna()) & (df_all["Toplam Skor"] >= min_score)]
+
+    st.subheader(f"🚀 AL Listesi ({min_score}+ Puan)")
+    if df_al.empty:
+        st.warning("Eşiği geçen hisse bulunamadı.")
     else:
-        st.info("⬅️ Ayarları yapıp **Taramayı Başlat** butonuna basın.")
-        
-        with st.expander("📖 Puanlama Sistemi Detayları"):
-            st.markdown("""
-            ### 📊 Toplam 100 Puan Üzerinden
-            
-            #### 🔵 Temel Analiz (40 Puan)
-            | Kriter | Maks Puan | Detay |
-            |--------|-----------|-------|
-            | F/K Oranı | 15 | <10 = 15 puan, >30 = 2 puan |
-            | PD/DD | 15 | <2 = 15 puan, >8 = 2 puan |
-            | Kar Büyümesi | 10 | >%50 = 10 puan, negatif = 0 |
-            
-            #### 🟠 Teknik Analiz (60 Puan)
-            | Kriter | Maks Puan | Detay |
-            |--------|-----------|-------|
-            | MA50 Üzeri | 15 | Fiyat > MA50 |
-            | RSI | 15 | 50-60 arası ideal (15 puan) |
-            | MACD | 15 | Crossover + histogram büyüme |
-            | Momentum | 15 | 1 aylık getiri >%10 = tam puan |
-            
-            ### 🎯 AL Sinyali: 70+ Puan
-            - **80+**: Çok Güçlü Al
-            - **70-79**: Güçlü Al
-            - **60-69**: İzle
-            - **<60**: Bekle
-            """)
+        st.dataframe(df_al, use_container_width=True)
 
-if __name__ == "__main__":
-    main()
+else:
+    st.info("⬅️ Sol panelden **Taramayı Başlat** butonuna basın.")
