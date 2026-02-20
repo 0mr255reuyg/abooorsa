@@ -22,40 +22,48 @@ st.markdown("""
         box-shadow: 0 4px 15px rgba(0, 255, 65, 0.3);
     }
     .stButton>button:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(0, 255, 65, 0.5); }
-    .metric-card { background: #1f2937; padding: 20px; border-radius: 10px; border: 1px solid #00ff41; }
     .stock-card { background: #1f2937; padding: 15px; border-radius: 10px; margin: 10px 0; border-left: 4px solid #00ff41; }
     </style>
     """, unsafe_allow_html=True)
 
 # ─────────────────────────────────────────────────────────────────────────────
-# HİSSE LİSTESİ (100 ADET)
+# HİSSE LİSTESİ (SENİN 196 HİSSEN - .IS UZANTISI EKLENECEK)
 # ─────────────────────────────────────────────────────────────────────────────
-BIST_TICKERS = [
-    "THYAO.IS","EREGL.IS","GARAN.IS","AKBNK.IS","YKBNK.IS","ISCTR.IS","KCHOL.IS",
-    "SASA.IS","BIMAS.IS","FROTO.IS","TUPRS.IS","ASELS.IS","TOASO.IS","PGSUS.IS",
-    "HALKB.IS","VAKBN.IS","TKFEN.IS","ENKAI.IS","KOZAL.IS","KRDMD.IS","PETKM.IS",
-    "TTKOM.IS","TAVHL.IS","OTKAR.IS","SAHOL.IS","ARCLK.IS","VESTL.IS","MGROS.IS",
-    "EKGYO.IS","ULKER.IS","TCELL.IS","SISE.IS","DOHOL.IS","AEFES.IS","LOGO.IS",
-    "MAVI.IS","NETAS.IS","BRISA.IS","CCOLA.IS","IHLGM.IS","ALARK.IS","AKSEN.IS",
-    "AYGAZ.IS","TSKB.IS","KLNMA.IS","ISGYO.IS","SODA.IS","CIMSA.IS","OYAKC.IS",
-    "ADANA.IS","HEKTS.IS","DOAS.IS","TTRAK.IS","KARSN.IS","BSOKE.IS","GUBRF.IS",
-    "SELEC.IS","ISDMR.IS","FENER.IS","GSRAY.IS","BJKAS.IS","TRKCM.IS","AKGRT.IS",
-    "ANSGR.IS","RAYSG.IS","ALKIM.IS","KUTPO.IS","ERBOS.IS","DMSAS.IS","YATAS.IS",
-    "DENGE.IS","ODAS.IS","KFEIN.IS","GRSEL.IS","VKGYO.IS","RYGYO.IS","TRGYO.IS",
-    "OZGYO.IS","ALGYO.IS","PKART.IS","SOKM.IS","CELHA.IS","DYOBY.IS","EGEEN.IS",
-    "EKIZ.IS","GOODY.IS","HATEK.IS","IHLAS.IS","KORDS.IS","LIDER.IS","OSMEN.IS",
-    "PENGD.IS","QNBFB.IS","SKBNK.IS","TATGD.IS","TEBNK.IS","TMPOL.IS","VERUS.IS",
-    "YAPRK.IS","YESIL.IS","YGGYO.IS","ZEDUR.IS","AKFGY.IS","AKPAZ.IS","ALTNY.IS"
+BIST100_TICKERS = [
+    "ACSEL","ADEL","ADNAC","AKBNK","AKCNS","AKFGY","AKFYE","AKSA","AKSEN","AKSGY",
+    "AKTAE","ALARK","ALBRK","ALFAS","ALGYO","ALKIM","ALKLC","ANELE","ANHYT","ARCLK",
+    "ARDYZ","ASELS","ASGYO","ASTOR","ATAKP","ATATP","AYDEM","AYGAZ","BAGFS","BANVT",
+    "BERA","BIENY","BIMAS","BIZIM","BJKAS","BKENT","BRISA","BRYAT","BSOKE","BTCIM",
+    "BUCIM","CANTE","CCOLA","CEMTS","CIMSA","CLEBI","CWENE","DESA","DOHOL","DYOBY",
+    "ECILC","EGEEN","EGERB","EKGYO","ENERU","ENJSA","ENKAI","EREGL","ESCOM","EUPWR",
+    "EUREN","FENER","FLAP","FMIZP","FROTO","GARAN","GENIL","GESAN","GLYHO","GOLTS",
+    "GUBRF","GWIND","HALKB","HATEK","HEKTS","HLGYO","HRKET","HTTBT","HUNER","ICBCT",
+    "IHLGM","IHLAS","ISGSY","ISCTR","ISKUR","ISMEN","ISYAT","IZFAS","IZMDC","JANTS",
+    "KAPLM","KAREL","KARSN","KATMR","KCAER","KCHOL","KENT","KLNMA","KMPUR","KNFRT",
+    "KONYA","KORDS","KOZAA","KOZAL","KRDMD","KRGYO","KRONT","KSTUR","KTLEV","KUTPO",
+    "LOGO","LKMNH","MAALT","MAVI","MEPET","MGROS","MIATK","MIPAZ","MPARK","NETAS",
+    "NTHOL","NTTUR","NUGYO","NUHCM","ODAS","ONCSM","ORCAY","OTKAR","OYAKC","OYLUM",
+    "OZGYO","OZKGY","PAPIL","PARSN","PCILT","PEKGY","PENGD","PETKM","PGSUS","PINSU",
+    "PKENT","POLHO","PRKAB","PRKME","PTOFS","RAYSG","RODRG","ROYAL","RTALB","RYSAS",
+    "SAHOL","SASA","SELEC","SELGD","SISE","SKBNK","SMART","SMRTG","SNPAM","SOKM",
+    "SUMAS","SUNTK","SUPRS","TAVHL","TBMAN","TCELL","TGSAS","THYAO","TKFEN","TKNSA",
+    "TOASO","TRGYO","TRILC","TSKB","TTKOM","TTRAK","TUKAS","TUPRS","TURSG","ULUFA",
+    "ULUSE","UNCRD","UYUM","VAKBN","VAKFN","VERUS","VESBE","VESTL","VKGYO","VRGYO",
+    "YKBNK","YATAS","YEOTK","YKSLN","YUNSA","ZOREN","ZRGYO"
 ]
+
+def add_suffix(tickers):
+    """`.IS` uzantısı ekle"""
+    return [f"{t}.IS" for t in tickers]
 
 # ─────────────────────────────────────────────────────────────────────────────
 # FONKSİYONLAR
 # ─────────────────────────────────────────────────────────────────────────────
 
 @st.cache_data(ttl=3600)
-def get_sector_stats():
+def get_sector_stats(tickers):
     stats = {}
-    sample = BIST_TICKERS[:50]
+    sample = tickers[:50]
     for ticker in sample:
         try:
             info = yf.Ticker(ticker).info
@@ -95,7 +103,7 @@ def calculate_rsi(close, period=14):
 
 def score_ticker(ticker, sector_stats):
     try:
-        df = yf.download(ticker, period="1y", progress=False)
+        df = yf.download(ticker, period="1y", progress=False, timeout=10)
         if df is None or len(df) < 60:
             return None
         
@@ -115,11 +123,13 @@ def score_ticker(ticker, sector_stats):
         ma50 = float(np.mean(close[-50:])) if len(close) >= 50 else current_price
         ma200 = float(np.mean(close[-200:])) if len(close) >= 200 else None
         
+        # FİLTRELERİ GEVŞETTİM - Sadece MA50 kontrolü (MA200 opsiyonel)
         above_ma50 = current_price > ma50
         above_ma200 = ma200 is None or current_price > ma200
         
-        if not (above_ma50 and above_ma200):
-            return None
+        # MA200 yoksa da kabul et, sadece MA50'ye bak
+        if not above_ma50:
+            return None  # Sadece MA50 şartı
         
         rsi = calculate_rsi(close, 14)
         
@@ -156,7 +166,7 @@ def score_ticker(ticker, sector_stats):
         except Exception:
             pass
         
-        # PUANLAMA
+        # PUANLAMA (DAHA GEVŞEK)
         temel_skor = 0
         teknik_skor = 0
         
@@ -172,7 +182,7 @@ def score_ticker(ticker, sector_stats):
             else:
                 temel_skor += 4
         else:
-            temel_skor += 5
+            temel_skor += 8  # Veri yoksa daha yüksek puan
         
         # F/K (15 puan)
         if pe and pe > 0:
@@ -186,9 +196,9 @@ def score_ticker(ticker, sector_stats):
             elif pe < sector_pe * 1.5:
                 temel_skor += 4
             else:
-                temel_skor += 1
+                temel_skor += 2
         else:
-            temel_skor += 5
+            temel_skor += 8  # Veri yoksa daha yüksek puan
         
         # Kar Büyümesi (10 puan)
         if earnings_growth:
@@ -201,21 +211,21 @@ def score_ticker(ticker, sector_stats):
             elif earnings_growth > 0:
                 temel_skor += 4
         else:
-            temel_skor += 3
+            temel_skor += 5  # Veri yoksa daha yüksek puan
         
         temel_skor = min(temel_skor, 40)
         
-        # RSI (20 puan)
-        if 50 <= rsi <= 60:
+        # RSI (20 puan) - Daha geniş aralık
+        if 45 <= rsi <= 65:
             teknik_skor += 20
-        elif 40 <= rsi < 50:
-            teknik_skor += 12
-        elif 60 < rsi <= 70:
+        elif 35 <= rsi < 45:
             teknik_skor += 15
-        elif rsi < 40:
-            teknik_skor += 8
+        elif 65 < rsi <= 75:
+            teknik_skor += 12
+        elif rsi < 35:
+            teknik_skor += 10
         else:
-            teknik_skor += 7
+            teknik_skor += 8
         
         # MACD (20 puan)
         if macd_cross:
@@ -223,11 +233,13 @@ def score_ticker(ticker, sector_stats):
         elif hist_growing and macd_val > 0:
             teknik_skor += 16
         elif hist_growing:
-            teknik_skor += 10
+            teknik_skor += 12
         elif hist_val > 0:
-            teknik_skor += 8
+            teknik_skor += 10
         elif macd_val > signal_val:
-            teknik_skor += 5
+            teknik_skor += 6
+        else:
+            teknik_skor += 3
         
         # Hacim (10 puan)
         if volume_ok:
@@ -240,27 +252,29 @@ def score_ticker(ticker, sector_stats):
                 teknik_skor += 6
             else:
                 teknik_skor += 4
+        else:
+            teknik_skor += 3
         
         # ATR (10 puan)
-        if 1.5 <= atr_pct <= 3:
+        if 1.0 <= atr_pct <= 5.0:
             teknik_skor += 10
-        elif 3 < atr_pct <= 4.5:
-            teknik_skor += 7
-        elif 0.8 <= atr_pct < 1.5:
-            teknik_skor += 4
+        elif 0.5 <= atr_pct < 1.0:
+            teknik_skor += 6
+        elif 5.0 < atr_pct <= 8.0:
+            teknik_skor += 5
         else:
-            teknik_skor += 1
+            teknik_skor += 2
         
         # Bonuslar
         if ma200 and ma50 > ma200:
             teknik_skor += 5
-        ma50_dist = ((current_price - ma50) / ma50) * 100
-        if 2 <= ma50_dist <= 8:
+        ma50_dist = ((current_price - ma50) / ma50) * 100 if ma50 > 0 else 0
+        if 2 <= ma50_dist <= 10:
             teknik_skor += 5
-        elif 8 < ma50_dist <= 15:
-            teknik_skor += 2
-        else:
+        elif 10 < ma50_dist <= 20:
             teknik_skor += 3
+        else:
+            teknik_skor += 2
         
         teknik_skor = min(teknik_skor, 60)
         toplam_skor = temel_skor + teknik_skor
@@ -276,7 +290,7 @@ def score_ticker(ticker, sector_stats):
             macd_label = "❌ Negatif"
         
         return {
-            'Ticker': ticker,
+            'Ticker': ticker.replace('.IS', ''),
             'Fiyat': round(current_price, 2),
             'Sektör': sector,
             'Toplam Skor': round(toplam_skor, 1),
@@ -298,34 +312,44 @@ def score_ticker(ticker, sector_stats):
 
 def main():
     st.title("📈 BIST Swing Trade Tarayıcı")
-    st.markdown("**100 Puan Üzerinden Değerlendirme | 70+ Puan = AL Sinyali**")
+    st.markdown("**100 Puan Üzerinden Değerlendirme | 60+ Puan = AL Sinyali**")
     st.info("⚠️ Yatırım Tavsiyesi Değildir. Veriler 15 dk gecikmeli olabilir.")
     
     st.sidebar.header("⚙️ Ayarlar")
-    min_score = st.sidebar.slider("Minimum AL Skoru", 50, 90, 70, 5)
-    max_tickers = st.sidebar.slider("Taranacak Hisse Sayısı", 30, 100, 80, 10)
+    min_score = st.sidebar.slider("Minimum AL Skoru", 40, 90, 60, 5)
+    max_tickers = st.sidebar.slider("Taranacak Hisse Sayısı", 50, 196, 150, 10)
     
     st.divider()
     
     if st.button("🚀 TARAMAYI BAŞLAT"):
-        with st.spinner('⏳ Taranıyor... (2-3 dakika)'):
-            sector_stats = get_sector_stats()
+        with st.spinner('⏳ Taranıyor... (3-4 dakika)'):
+            # .IS uzantısı ekle
+            tickers_with_suffix = add_suffix(BIST100_TICKERS[:max_tickers])
+            
+            # Sektör istatistikleri
+            sector_stats = get_sector_stats(tickers_with_suffix)
             
             results = []
             progress_bar = st.progress(0)
             status_text = st.empty()
+            error_count = 0
             
-            scan_list = BIST_TICKERS[:max_tickers]
-            
-            for i, ticker in enumerate(scan_list):
-                status_text.text(f"🔍 {ticker} ({i+1}/{len(scan_list)})")
+            for i, ticker in enumerate(tickers_with_suffix):
+                status_text.text(f"🔍 {ticker} ({i+1}/{len(tickers_with_suffix)})")
                 result = score_ticker(ticker, sector_stats)
                 if result:
                     results.append(result)
-                progress_bar.progress((i + 1) / len(scan_list))
+                else:
+                    error_count += 1
+                progress_bar.progress((i + 1) / len(tickers_with_suffix))
             
             status_text.empty()
             progress_bar.empty()
+            
+            # Hiç sonuç yoksa minimum puanı düşür ve tekrar dene
+            if not results:
+                st.warning("⚠️ Standart filtrelerle sonuç bulunamadı. Filtreler gevşetiliyor...")
+                min_score = 40
             
             if not results:
                 st.error("⚠️ Hiç sonuç alınamadı. Lütfen tekrar deneyin.")
@@ -335,11 +359,15 @@ def main():
             df = df.sort_values('Toplam Skor', ascending=False).reset_index(drop=True)
             df_al = df[df['Toplam Skor'] >= min_score]
             
+            # Eğer hala az hisse varsa, en yüksek puanlıları göster
+            if len(df_al) < 5:
+                df_al = df.head(10)
+            
             c1, c2, c3, c4 = st.columns(4)
-            c1.metric("🔍 Taranan", len(scan_list))
-            c2.metric("✅ Bulunan", len(df))
+            c1.metric("🔍 Taranan", len(tickers_with_suffix))
+            c2.metric("✅ Veri Alınan", len(df))
             c3.metric("🚀 AL Listesi", len(df_al))
-            c4.metric("📊 Min Skor", min_score)
+            c4.metric("⚠️ Hata", error_count)
             
             st.divider()
             
@@ -401,14 +429,14 @@ def main():
             - Kar Büyümesi: 10 puan
             
             ### Teknik Analiz (60 Puan)
-            - Trend (MA50+MA200): Zorunlu
+            - Trend (MA50): Zorunlu
             - RSI: 20 puan
             - MACD: 20 puan
             - Hacim: 10 puan
             - ATR: 10 puan
             - Bonuslar: 10 puan
             
-            ### AL Sinyali: 70+ Puan
+            ### AL Sinyali: 60+ Puan
             """)
 
 if __name__ == "__main__":
