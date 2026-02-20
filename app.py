@@ -5,6 +5,7 @@ import numpy as np
 import plotly.graph_objects as go
 from datetime import datetime
 import warnings
+import traceback
 
 warnings.filterwarnings("ignore")
 st.set_page_config(page_title="BIST Tarayıcı", layout="wide", page_icon="📈")
@@ -20,27 +21,59 @@ st.markdown("""
         border: none; padding: 15px 30px; border-radius: 10px; width: 100%;
     }
     .stock-card { background: #1f2937; padding: 15px; border-radius: 10px; margin: 10px 0; border-left: 4px solid #00ff41; }
+    .error-box { background: #2d1a1a; border-left: 4px solid #ff4444; padding: 15px; margin: 10px 0; border-radius: 8px; }
+    .success-box { background: #1a2d1a; border-left: 4px solid #00ff41; padding: 15px; margin: 10px 0; border-radius: 8px; }
     </style>
     """, unsafe_allow_html=True)
 
 # ─────────────────────────────────────────────────────────────────────────────
-# HİSSE LİSTESİ (50 ADET - HIZLI)
+# HİSSE LİSTESİ (10 ADET - TEST İÇİN)
 # ─────────────────────────────────────────────────────────────────────────────
-TICKERS = [
-    "THYAO.IS", "ASELS.IS", "GARAN.IS", "AKBNK.IS", "EREGL.IS", "TUPRS.IS",
-    "SASA.IS", "KCHOL.IS", "SAHOL.IS", "BIMAS.IS", "MGROS.IS", "FROTO.IS",
-    "TOASO.IS", "TCELL.IS", "TTKOM.IS", "HEKTS.IS", "ALARK.IS", "DOHOL.IS",
-    "ISCTR.IS", "YKBNK.IS", "HALKB.IS", "VAKBN.IS", "KOZAL.IS", "SOKM.IS",
-    "CCOLA.IS", "ANSGR.IS", "PGSUS.IS", "ULKER.IS", "TAVHL.IS", "ISGYO.IS",
-    "EKGYO.IS", "VESBE.IS", "BRISA.IS", "DEVA.IS", "GUBRF.IS", "POLHO.IS",
-    "CIMSA.IS", "NUHOL.IS", "KARSN.IS", "DOAS.IS", "TTRAK.IS", "MAVI.IS",
-    "AEFES.IS", "LOGO.IS", "NETAS.IS", "IHLGM.IS", "OYAKC.IS", "SELEC.IS",
-    "FENER.IS", "GSRAY.IS"
+TEST_TICKERS = [
+    "THYAO.IS", "ASELS.IS", "GARAN.IS", "AKBNK.IS", "EREGL.IS",
+    "SASA.IS", "BIMAS.IS", "FROTO.IS", "TUPRS.IS", "KCHOL.IS"
 ]
 
 # ─────────────────────────────────────────────────────────────────────────────
-# FONKSİYONLAR (SADELEŞTİRİLMİŞ)
+# FONKSİYONLAR (HATA LOG'LU)
 # ─────────────────────────────────────────────────────────────────────────────
+
+def test_yahoo_connection():
+    """Yahoo Finance bağlantısını test et"""
+    errors = []
+    try:
+        st.write("🔌 Test 1: yfinance import...")
+        import yfinance
+        st.write(f"✅ yfinance versiyon: {yfinance.__version__}")
+    except Exception as e:
+        errors.append(f"❌ yfinance import hatası: {str(e)}")
+    
+    try:
+        st.write("🔌 Test 2: THYAO.IS veri çekme...")
+        df = yf.download("THYAO.IS", period="5d", progress=False, timeout=10)
+        if df is not None and len(df) > 0:
+            st.write(f"✅ Veri alındı: {len(df)} satır")
+            st.write(f"📊 Sütunlar: {list(df.columns)}")
+            return True, errors
+        else:
+            errors.append("❌ Veri boş geldi")
+            st.write("❌ Veri boş geldi")
+    except Exception as e:
+        errors.append(f"❌ Download hatası: {str(e)}")
+        st.write(f"❌ Hata: {str(e)}")
+    
+    try:
+        st.write("🔌 Test 3: Ticker info...")
+        ticker = yf.Ticker("THYAO.IS")
+        info = ticker.info
+        if info:
+            st.write(f"✅ Info alındı: {len(info)} alan")
+        else:
+            errors.append("❌ Info boş")
+    except Exception as e:
+        errors.append(f"❌ Info hatası: {str(e)}")
+    
+    return False, errors
 
 def calculate_rsi(close, period=14):
     delta = np.diff(close)
@@ -56,35 +89,43 @@ def calculate_rsi(close, period=14):
         rsi = 100 - (100 / (1 + rs))
     return rsi
 
-def score_ticker(ticker):
+def score_ticker(ticker, log_errors=False):
+    """Hisse analizi - detaylı hata logu"""
     try:
-        # Tek istek - hızlı
-        df = yf.download(ticker, period="6mo", progress=False, timeout=5)
+        df = yf.download(ticker, period="6mo", progress=False, timeout=10)
         
-        if df is None or len(df) < 50:
+        if df is None:
+            if log_errors:
+                st.write(f"❌ {ticker}: Veri None")
+            return None
+        
+        if len(df) < 50:
+            if log_errors:
+                st.write(f"❌ {ticker}: Yetersiz veri ({len(df)} satır)")
             return None
         
         if isinstance(df.columns, pd.MultiIndex):
             df.columns = df.columns.get_level_values(0)
         
         if 'Close' not in df.columns:
+            if log_errors:
+                st.write(f"❌ {ticker}: Close sütunu yok. Sütunlar: {list(df.columns)}")
             return None
         
         df = df.dropna(subset=['Close'])
         if len(df) < 50:
+            if log_errors:
+                st.write(f"❌ {ticker}: Dropna sonrası yetersiz veri")
             return None
         
         close = df['Close'].values
         current_price = float(close[-1])
         
-        # MA50
         ma50 = float(np.mean(close[-50:])) if len(close) >= 50 else current_price
         above_ma50 = current_price > ma50
         
-        # RSI
         rsi = calculate_rsi(close, 14)
         
-        # MACD (basit)
         exp1 = pd.Series(close).ewm(span=12, adjust=False).mean()
         exp2 = pd.Series(close).ewm(span=26, adjust=False).mean()
         macd = exp1 - exp2
@@ -92,34 +133,20 @@ def score_ticker(ticker):
         macd_val = float(macd.iloc[-1])
         signal_val = float(signal.iloc[-1])
         
-        # Momentum (1 ay)
         momentum = 0
         if len(close) >= 21:
             momentum = ((close[-1] / close[-21]) - 1) * 100
         
-        # PUANLAMA (ÇOK BASİT)
-        score = 50  # Başlangıç
+        score = 50
+        if above_ma50: score += 20
+        if 45 <= rsi <= 65: score += 15
+        elif 35 <= rsi < 45: score += 10
+        elif 65 < rsi <= 75: score += 8
+        if macd_val > signal_val: score += 15
+        if momentum > 0: score += 10
+        elif momentum > -5: score += 5
         
-        if above_ma50:
-            score += 20
-        if 45 <= rsi <= 65:
-            score += 15
-        elif 35 <= rsi < 45:
-            score += 10
-        elif 65 < rsi <= 75:
-            score += 8
-        if macd_val > signal_val:
-            score += 15
-        if momentum > 0:
-            score += 10
-        elif momentum > -5:
-            score += 5
-        
-        # MACD Label
-        if macd_val > signal_val:
-            macd_label = "✅ Pozitif"
-        else:
-            macd_label = "❌ Negatif"
+        macd_label = "✅ Pozitif" if macd_val > signal_val else "❌ Negatif"
         
         return {
             'Hisse': ticker.replace('.IS', ''),
@@ -130,7 +157,10 @@ def score_ticker(ticker):
             'Momentum%': round(momentum, 2),
             'MA50 Üstü': '✅' if above_ma50 else '❌'
         }
+    
     except Exception as e:
+        if log_errors:
+            st.write(f"❌ {ticker}: {str(e)}")
         return None
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -138,104 +168,118 @@ def score_ticker(ticker):
 # ─────────────────────────────────────────────────────────────────────────────
 
 def main():
-    st.title("📈 BIST Hisse Tarayıcı")
-    st.markdown("**Hızlı Teknik Analiz | 60+ Puan = AL**")
-    st.info("⚠️ Yatırım Tavsiyesi Değildir")
-    
-    # ── TEST BAĞLANTI ────────────────────────────────────────────────────────
-    st.sidebar.header("⚙️ Ayarlar")
-    
-    # Önce Yahoo çalışıyor mu test et
-    if 'connection_tested' not in st.session_state:
-        with st.sidebar:
-            st.write("🔌 Bağlantı testi...")
-            try:
-                test = yf.download("THYAO.IS", period="5d", progress=False)
-                if test is not None and len(test) > 0:
-                    st.session_state['connection_tested'] = True
-                    st.success("✅ Yahoo çalışıyor!")
-                else:
-                    st.session_state['connection_tested'] = False
-                    st.error("❌ Yahoo bağlantı hatası!")
-            except:
-                st.session_state['connection_tested'] = False
-                st.error("❌ Yahoo bağlantı hatası!")
-    
-    min_score = st.sidebar.slider("Min Skor", 40, 80, 60, 5)
-    max_stocks = st.sidebar.slider("Hisse Sayısı", 20, 50, 40, 5)
+    st.title("📈 BIST Hisse Tarayıcı (Debug)")
+    st.markdown("**Sorun Tespit Modu**")
+    st.info("⚠️ Bu versiyon hata ayıklama içindir.")
     
     st.divider()
     
-    if st.button("🚀 TARAMAYI BAŞLAT"):
-        if not st.session_state.get('connection_tested', False):
-            st.error("❌ Yahoo Finance bağlantısı başarısız. Lütfen 1 dakika bekleyip tekrar deneyin.")
-            st.stop()
+    # ── BAĞLANTI TESTİ ────────────────────────────────────────────────────────
+    st.subheader("🔌 Adım 1: Yahoo Finance Bağlantı Testi")
+    
+    if st.button("🧪 Bağlantıyı Test Et"):
+        with st.spinner('Test ediliyor...'):
+            success, errors = test_yahoo_connection()
+            
+            if success:
+                st.markdown('<div class="success-box">✅ Yahoo Finance çalışıyor! Taramaya geçebilirsiniz.</div>', unsafe_allow_html=True)
+                st.session_state['yahoo_ok'] = True
+            else:
+                st.markdown('<div class="error-box">❌ Yahoo Finance bağlantı sorunu!</div>', unsafe_allow_html=True)
+                st.session_state['yahoo_ok'] = False
+                
+                if errors:
+                    st.write("### 📋 Hata Detayları:")
+                    for err in errors:
+                        st.write(err)
+                
+                st.warning("""
+                ### 🔧 Olası Çözümler:
+                1. **Streamlit Cloud IP Blok**: Yahoo Finance, Streamlit Cloud IP'lerini blokluyor olabilir.
+                2. **Çözüm**: Bilgisayarınızda çalıştırın (`streamlit run app.py`)
+                3. **Alternatif**: TradingView hisse tarama kullanın
+                4. **Alternatif**: Farklı hosting (Render, Railway) deneyin
+                """)
+    
+    st.divider()
+    
+    # ── TARAMA ────────────────────────────────────────────────────────────────
+    st.subheader("🔍 Adım 2: Hisse Tarama")
+    
+    if not st.session_state.get('yahoo_ok', False):
+        st.warning("⚠️ Önce bağlantı testini başarılı yapın!")
+    else:
+        min_score = st.slider("Min Skor", 40, 80, 60, 5)
+        show_logs = st.checkbox("Hata Loglarını Göster", value=True)
         
-        with st.spinner('⏳ Taranıyor... (1-2 dakika)'):
-            results = []
-            progress_bar = st.progress(0)
-            status_text = st.empty()
-            
-            for i, ticker in enumerate(TICKERS[:max_stocks]):
-                status_text.text(f"🔍 {ticker} ({i+1}/{max_stocks})")
-                result = score_ticker(ticker)
-                if result:
-                    results.append(result)
-                progress_bar.progress((i + 1) / max_stocks)
-            
-            status_text.empty()
-            progress_bar.empty()
-            
-            if not results:
-                st.error("⚠️ Hiç veri alınamadı. Yahoo Finance şu an yoğun olabilir. 2 dakika bekleyip tekrar deneyin.")
-                st.stop()
-            
-            df = pd.DataFrame(results)
-            df = df.sort_values('Skor', ascending=False).reset_index(drop=True)
-            df_al = df[df['Skor'] >= min_score]
-            
-            # Az hisse varsa en yüksekleri göster
-            if len(df_al) < 3:
-                df_al = df.head(10)
-            
-            c1, c2, c3 = st.columns(3)
-            c1.metric("🔍 Taranan", max_stocks)
-            c2.metric("✅ Bulunan", len(df))
-            c3.metric("🚀 AL Listesi", len(df_al))
-            
-            st.divider()
-            
-            if not df_al.empty:
-                st.subheader("🏆 En İyi 5 Hisse")
-                cols = st.columns(min(5, len(df_al)))
-                for idx, (_, row) in enumerate(df_al.head(5).iterrows()):
-                    with cols[idx]:
-                        emoji = "🥇" if idx == 0 else "🥈" if idx == 1 else "🥉" if idx == 2 else "⭐"
-                        st.markdown(f"""
-                        <div class="stock-card">
-                            <h4>{emoji} {row['Hisse']}</h4>
-                            <b>Fiyat:</b> {row['Fiyat']} ₺<br>
-                            <b>Skor:</b> {row['Skor']}/100<br>
-                            <b>RSI:</b> {row['RSI']}<br>
-                            <b>MACD:</b> {row['MACD']}<br>
-                            <b>Momentum:</b> %{row['Momentum%']}
-                        </div>
-                        """, unsafe_allow_html=True)
+        if st.button("🚀 TARAMAYI BAŞLAT"):
+            with st.spinner('⏳ Taranıyor...'):
+                results = []
+                progress_bar = st.progress(0)
+                
+                for i, ticker in enumerate(TEST_TICKERS):
+                    if show_logs:
+                        st.write(f"🔍 {ticker}...")
+                    
+                    result = score_ticker(ticker, log_errors=show_logs)
+                    if result:
+                        results.append(result)
+                        if show_logs:
+                            st.write(f"✅ {ticker}: Skor {result['Skor']}")
+                    
+                    progress_bar.progress((i + 1) / len(TEST_TICKERS))
+                
+                progress_bar.empty()
                 
                 st.divider()
-                st.subheader("📊 Tüm Sonuçlar")
-                st.dataframe(df_al, use_container_width=True, hide_index=True)
+                st.write(f"### 📊 Sonuç: {len(results)}/{len(TEST_TICKERS)} hisse")
                 
-                csv = df_al.to_csv(index=False, encoding='utf-8-sig')
-                st.download_button("📥 CSV İndir", csv, "bist_tarama.csv", "text/csv")
-            else:
-                st.warning(f"⚠️ {min_score}+ puan alan bulunamadı.")
-            
-            st.success("✅ Tamamlandı!")
+                if results:
+                    df = pd.DataFrame(results)
+                    df = df.sort_values('Skor', ascending=False)
+                    df_al = df[df['Skor'] >= min_score]
+                    
+                    st.write(f"✅ {len(df_al)} hisse {min_score}+ puan aldı")
+                    st.dataframe(df_al, use_container_width=True)
+                    
+                    csv = df_al.to_csv(index=False, encoding='utf-8-sig')
+                    st.download_button("📥 CSV İndir", csv, "bist_tarama.csv", "text/csv")
+                else:
+                    st.error("❌ Hiç hisse bulunamadı. Yahoo Finance veri çekemiyor.")
     
-    else:
-        st.info("⬅️ Ayarları yapıp **Taramayı Başlat** butonuna basın.")
+    st.divider()
+    
+    # ── BİLGİ ─────────────────────────────────────────────────────────────────
+    st.subheader("ℹ️ Sorun Nedir?")
+    st.markdown("""
+    ### 🚨 Streamlit Cloud + Yahoo Finance Sorunu
+    
+    Yahoo Finance, **bulut IP adreslerini** (Streamlit Cloud, AWS, Google Cloud vb.) sık sık **blokluyor** veya **rate-limit** uyguluyor.
+    
+    ### ✅ Çözüm Önerileri:
+    
+    | Yöntem | Açıklama | Zorluk |
+    |--------|----------|--------|
+    | **Bilgisayarda Çalıştır** | `pip install streamlit yfinance` → `streamlit run app.py` | ⭐ Kolay |
+    | **TradingView** | Ücretsiz hisse tarama ekranı | ⭐ Kolay |
+    | **Render.com** | Farklı hosting, IP farklı olabilir | ⭐⭐ Orta |
+    | **Matriks/İdeal Data** | Ücretli ama garantili BIST verisi | ⭐⭐⭐ Zor |
+    
+    ### 💻 Bilgisayarda Çalıştırma (ÖNERİLEN):
+    
+    ```bash
+    # 1. Python kur (python.org)
+    # 2. Terminal aç
+    pip install streamlit yfinance pandas numpy plotly
+    
+    # 3. app.py'yi çalıştır
+    streamlit run app.py
+    
+    # 4. Tarayıcıda açılır (http://localhost:8501)
+    ```
+    
+    Bu şekilde **sınırsız ve kesintisiz** çalışır!
+    """)
 
 if __name__ == "__main__":
     main()
-    
